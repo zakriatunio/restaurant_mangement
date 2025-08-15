@@ -75,7 +75,7 @@ jobs:
       - name: Build Frontend Assets
         run: npm run build
       
-      - name: Fix Migration Issue
+      - name: Fix Countries Migration
         run: |
           # Create a fixed version of the countries migration
           cat > database/migrations/2024_08_02_061808_create_countries_table.php << 'EOF'
@@ -101,6 +101,83 @@ jobs:
               public function down(): void
               {
                   Schema::dropIfExists('countries');
+              }
+          };
+          EOF
+      
+      - name: Create Missing Currencies Table
+        run: |
+          # Create a currencies table migration if it doesn't exist
+          if [ ! -f database/migrations/*_create_currencies_table.php ]; then
+            cat > database/migrations/2024_01_01_000003_create_currencies_table.php << 'EOF'
+            <?php
+            
+            use Illuminate\Database\Migrations\Migration;
+            use Illuminate\Database\Schema\Blueprint;
+            use Illuminate\Support\Facades\Schema;
+            
+            return new class extends Migration
+            {
+                public function up(): void
+                {
+                    Schema::create('currencies', function (Blueprint $table) {
+                        $table->id();
+                        $table->string('name');
+                        $table->string('code', 3)->unique();
+                        $table->string('symbol', 5);
+                        $table->timestamps();
+                    });
+                }
+            
+                public function down(): void
+                {
+                    Schema::dropIfExists('currencies');
+                }
+            };
+            EOF
+          fi
+      
+      - name: Fix Branches Migration
+        run: |
+          # Create a fixed version of the branches migration
+          cat > database/migrations/2024_10_11_100539_create_branches_table.php << 'EOF'
+          <?php
+          
+          use Illuminate\Database\Migrations\Migration;
+          use Illuminate\Database\Schema\Blueprint;
+          use Illuminate\Support\Facades\Schema;
+          
+          return new class extends Migration
+          {
+              public function up(): void
+              {
+                  Schema::create('branches', function (Blueprint $table) {
+                      $table->id();
+                      $table->string('name');
+                      $table->text('address')->nullable();
+                      $table->string('phone')->nullable();
+                      $table->string('email')->nullable();
+                      $table->integer('restaurant_id')->nullable();
+                      $table->timestamps();
+                  });
+                  
+                  // Only add restaurant_id to currencies if the table exists
+                  if (Schema::hasTable('currencies')) {
+                      Schema::table('currencies', function (Blueprint $table) {
+                          $table->integer('restaurant_id')->nullable()->after('id');
+                      });
+                  }
+              }
+          
+              public function down(): void
+              {
+                  Schema::dropIfExists('branches');
+                  
+                  if (Schema::hasTable('currencies') && Schema::hasColumn('currencies', 'restaurant_id')) {
+                      Schema::table('currencies', function (Blueprint $table) {
+                          $table->dropColumn('restaurant_id');
+                      });
+                  }
               }
           };
           EOF

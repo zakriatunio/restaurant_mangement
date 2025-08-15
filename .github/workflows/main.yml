@@ -1,0 +1,82 @@
+name: Continuous Integration
+on:
+  push:
+    branches: "main"
+jobs:
+  laravel-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@15c43e89cdef867065b0213be354c2841860869e
+        with:
+          php-version: "8.2"
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, bcmath, curl, zip, gd, dom, fileinfo, openssl, tokenizer
+          coverage: none
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Copy .env
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
+      
+      - name: Create required directories
+        run: |
+          mkdir -p bootstrap/cache
+          mkdir -p storage/framework/cache
+          mkdir -p storage/framework/sessions
+          mkdir -p storage/framework/views
+          mkdir -p storage/logs
+          mkdir -p database
+      
+      - name: Set Directory Permissions
+        run: chmod -R 775 storage bootstrap/cache
+      
+      - name: Create SQLite Database
+        run: |
+          touch database/database.sqlite
+          echo "DB_CONNECTION=sqlite" >> .env
+          echo "DB_DATABASE=database/database.sqlite" >> .env
+      
+      - name: Install Dependencies
+        run: |
+          composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist --ignore-platform-reqs
+      
+      - name: Generate Application Key
+        run: php artisan key:generate
+      
+      - name: Clear Config and Cache
+        run: |
+          php artisan config:clear
+          php artisan cache:clear
+          php artisan route:clear
+          php artisan view:clear
+      
+      - name: Optimize Autoloader
+        run: composer dump-autoload --optimize
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install npm Dependencies
+        run: |
+          npm install
+          npm cache clean --force
+      
+      - name: Build Frontend Assets
+        run: npm run build
+      
+      - name: Run Tests
+        run: php artisan test
+      
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: |
+            public/
+            bootstrap/cache/
+            storage/
+          retention-days: 7

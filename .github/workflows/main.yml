@@ -37,8 +37,6 @@ jobs:
           echo "DB_DATABASE=database/database.sqlite" >> .env
           echo "CACHE_DRIVER=array" >> .env
           echo "SESSION_DRIVER=array" >> .env
-      
-
           echo "QUEUE_DRIVER=sync" >> .env
       
       - name: Create SQLite Database
@@ -79,8 +77,33 @@ jobs:
       
       - name: Fix Migration Issue
         run: |
-          # Fix the duplicate primary key issue in countries migration
-          sed -i '/\$table->primary(.id.);/d' database/migrations/2024_08_02_061808_create_countries_table.php
+          # Create a fixed version of the countries migration
+          cat > database/migrations/2024_08_02_061808_create_countries_table.php << 'EOF'
+          <?php
+          
+          use Illuminate\Database\Migrations\Migration;
+          use Illuminate\Database\Schema\Blueprint;
+          use Illuminate\Support\Facades\Schema;
+          
+          return new class extends Migration
+          {
+              public function up(): void
+              {
+                  Schema::create('countries', function (Blueprint $table) {
+                      $table->id();
+                      $table->string('countries_code');
+                      $table->string('countries_name');
+                      $table->string('phonecode');
+                      $table->timestamps();
+                  });
+              }
+          
+              public function down(): void
+              {
+                  Schema::dropIfExists('countries');
+              }
+          };
+          EOF
       
       - name: Run Migrations
         run: php artisan migrate --force
